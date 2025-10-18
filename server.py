@@ -21,6 +21,9 @@ from starlette.applications import Starlette
 from starlette.responses import Response
 from starlette.types import Scope, Receive, Send
 
+from transport.sse import initialise_sse
+from transport.streamable_http import initialise_streamable_http
+
 def configure_logging() -> None:
     """Apply basic logging configuration."""
     logging.basicConfig(
@@ -44,23 +47,7 @@ def main(port: int, log_level: str, json_response: bool) -> None:
     
     sse = SseServerTransport('/message')
 
-    async def handle_sse(request):
-        """Handle SSE connection for MCP server."""
-        logger.info("Handling SSE connection")
-    
-        try:
-            async with sse.connect_sse(
-                request.scope, request.receive, request._send
-            ) as streams:
-                await app.run(
-                    streams[0], streams[1], app.create_initialization_options()
-                )
-        except Exception as e:
-            logger.error(f"SSE connection error: {e}")
-            raise
-        
-        return Response()
-
+    handle_sse = initialise_sse(app, sse, logger)
 
 
     # Set up StreamableHTTP transport
@@ -70,22 +57,8 @@ def main(port: int, log_level: str, json_response: bool) -> None:
         json_response=json_response,
         stateless=True,
     )
-
-    async def handle_streamable_http(
-        scope: Scope, receive: Receive, send: Send
-    ) -> None:
-        logger.info("Handling StreamableHTTP request")
-        
-        # Extract auth token from headers
-        auth_token = extract_access_token(scope)
-        
-        # Set the auth token in context for this request
-        token = auth_token_context.set(auth_token)
-        try:
-            await session_manager.handle_request(scope, receive, send)
-        finally:
-            auth_token_context.reset(token)
-
+    
+    handle_streamable_http = initialise_streamable_http(app, session_manager, logger)
 
     routes = [
         # SSE transport
