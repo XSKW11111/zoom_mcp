@@ -23,6 +23,7 @@ from starlette.types import Scope, Receive, Send
 
 from transport.sse import initialise_sse
 from transport.streamable_http import initialise_streamable_http
+from auth import get_access_token
 
 def configure_logging() -> None:
     """Apply basic logging configuration."""
@@ -47,7 +48,14 @@ def main(port: int, log_level: str, json_response: bool) -> None:
     
     sse = SseServerTransport('/message')
 
-    handle_sse = initialise_sse(app, sse, logger)
+    try:
+        access_token = asyncio.run(get_access_token())
+    except Exception as e:
+        logger.error(f"Error getting access token: {e}")
+
+    logger.info(f"Authenticated successfully")
+
+    handle_sse = initialise_sse(app, sse, logger, access_token)
 
 
     # Set up StreamableHTTP transport
@@ -58,7 +66,7 @@ def main(port: int, log_level: str, json_response: bool) -> None:
         stateless=True,
     )
     
-    handle_streamable_http = initialise_streamable_http(app, session_manager, logger)
+    handle_streamable_http = initialise_streamable_http(app, session_manager, logger, access_token)
 
     routes = [
         # SSE transport
@@ -84,5 +92,5 @@ def main(port: int, log_level: str, json_response: bool) -> None:
         logging.info("Server stopped")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
     
