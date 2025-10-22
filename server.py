@@ -4,26 +4,27 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+import sys
 import uvicorn
-
-from dotenv import load_dotenv
+from contextlib import asynccontextmanager
+import aiohttp
 
 import click
+from dotenv import load_dotenv
+
 from mcp.server.lowlevel import Server
 from mcp.server.sse import SseServerTransport
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import CallToolResult, ListToolsResult, Tool
+import mcp.types as types
 
 from starlette.routing import Mount, Route
 from starlette.applications import Starlette
-from starlette.responses import Response
-from starlette.types import Scope, Receive, Send
 
 from transport.sse import initialise_sse
 from transport.streamable_http import initialise_streamable_http
 from auth import get_access_token
+from data import get_zoom_meetings_by_user_id
 
 def configure_logging() -> None:
     """Apply basic logging configuration."""
@@ -46,16 +47,17 @@ def main(port: int, log_level: str, json_response: bool) -> None:
     # Create MCP server directly
     app = Server("zoom-mcp-server")
     
+    
     sse = SseServerTransport('/message')
 
     try:
-        access_token = asyncio.run(get_access_token())
+        asyncio.run(get_access_token())
     except Exception as e:
-        logger.error(f"Error getting access token: {e}")
+        logger.error("Error getting access token: %s", e)
 
-    logger.info(f"Authenticated successfully")
+    logger.info("Authenticated successfully")
 
-    handle_sse = initialise_sse(app, sse, logger, access_token)
+    handle_sse = initialise_sse(app, sse, logger)
 
 
     # Set up StreamableHTTP transport
@@ -66,17 +68,61 @@ def main(port: int, log_level: str, json_response: bool) -> None:
         stateless=True,
     )
     
-    handle_streamable_http = initialise_streamable_http(app, session_manager, logger, access_token)
+    handle_streamable_http = initialise_streamable_http(session_manager, logger)
 
     routes = [
         # SSE transport
         Route("/sse", endpoint=handle_sse),
         Mount("/message", app=sse.handle_post_message),
-        # StreamableHTTP transport
+        # StreamableHTTP transport - handle both /mcp and /mcp/
         Mount("/mcp", app=handle_streamable_http)
     ]
 
-    starlette_app = Starlette(routes=routes)
+    @asynccontextmanager
+    async def lifespan(app: Starlette):
+        app.state.http = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=20),
+            connector=aiohttp.TCPConnector(limit=100, ttl_dns_cache=300),
+            headers={"User-Agent": "zoom-mcp/0.1"}
+        )
+            # Initialize the StreamableHTTP session manager
+        async with session_manager.run():
+            logger.info("Application started with dual transport (StreamableHTTP)")
+            try:
+                yield
+            finally:
+                await app.state.http.close()
+
+    starlette_app = Starlette(routes=routes, lifespan=lifespan)
+
+
+    @app.list_tools()
+    async def list_tools() -> list[types.Tool]:
+        return [
+            types.Tool(
+                name="get_zoom_meetings_by_user_id",
+                description="Get Zoom meetings for a given user ID",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "user_id": {
+                            "type": "string",
+                            "description": "The ID of the user to get Zoom meetings for"
+                        }
+                    },
+                    "required": ["user_id"]
+                }
+            )
+        ]
+    
+    @app.call_tool()
+    async def call_tool(tool_name: str, args: dict) -> types.CallToolResult:
+        try:
+            if tool_name == "get_zoom_meetings_by_user_id":
+                return await get_zoom_meetings_by_user_id(app, **args)
+        except Exception as e:
+            logger.error("Error calling tool: %s", e)
+            return types.CallToolResult(content=[types.TextContent(type="text", text=f"Error calling tool: {e}")])
 
     try:
         uvicorn.run(
@@ -86,11 +132,11 @@ def main(port: int, log_level: str, json_response: bool) -> None:
               log_level=log_level.lower(),
             )
     except Exception as e:
-        logging.error(f"Error starting server: {e}")
+        logging.error("Error starting server: %s", e)
         sys.exit(1)
     finally:
         logging.info("Server stopped")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
     

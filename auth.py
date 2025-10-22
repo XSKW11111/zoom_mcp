@@ -16,7 +16,7 @@ load_dotenv()
 ZOOM_ACCOUNT_ID = os.getenv("ZOOM_ACCOUNT_ID")
 ZOOM_CLIENT_ID = os.getenv("ZOOM_CLIENT_ID")
 ZOOM_CLIENT_SECRET = os.getenv("ZOOM_CLIENT_SECRET")
-ZOOM_BASE_URL = "https://zoom.us/oauth"
+ZOOM_AUTH_BASE_URL = "https://zoom.us/oauth"
 
 class ZoomAuthError(Exception):
     """Custom exception for Zoom authentication errors."""
@@ -49,7 +49,7 @@ class ZoomAuthenticator:
     
     async def _refresh_access_token(self) -> None:
         """Refresh the access token using server-to-server OAuth."""
-        auth_url = f"{ZOOM_BASE_URL}/token"
+        auth_url = f"{ZOOM_AUTH_BASE_URL}/token"
         headers = {
             "Authorization": self._get_basic_auth_header(),
             "Content-Type": "application/x-www-form-urlencoded"
