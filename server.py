@@ -117,12 +117,32 @@ def main(port: int, log_level: str, json_response: bool) -> None:
     
     @app.call_tool()
     async def call_tool(tool_name: str, args: dict) -> types.CallToolResult:
+        """Execute a tool and return its ``CallToolResult`` payload.
+
+        Each tool helper is responsible for constructing the ``CallToolResult`` with
+        success or error content so the MCP transport can forward the structured
+        response to the client.  This dispatcher simply calls the matching helper,
+        returning a lightweight error result when the tool name is unrecognised or an
+        unexpected exception bubbles up.
+        """
+
         try:
             if tool_name == "get_zoom_meetings_by_user_id":
                 return await get_zoom_meetings_by_user_id(app, **args)
+
+            raise ValueError(f"Unknown tool requested: {tool_name}")
         except Exception as e:
-            logger.error("Error calling tool: %s", e)
-            return types.CallToolResult(content=[types.TextContent(type="text", text=f"Error calling tool: {e}")])
+            error_message = f"Error calling tool '{tool_name}': {e}"
+            logger.error(error_message)
+            return types.CallToolResult(
+                isError=True,
+                content=[
+                    types.TextContent(
+                        type="text",
+                        text=error_message,
+                    )
+                ],
+            )
 
     try:
         uvicorn.run(
