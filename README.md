@@ -16,7 +16,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-3. Update `.env` with your configuration
+3. Fill `.env` with your Zoom server-to-server OAuth credentials.
 
 ## Usage
 
@@ -47,15 +47,17 @@ Add this to your MCP client configuration:
 
 ## Development
 
-The project is organized into:
-- `server/core.py` - connect handler to tool in mcp_server
-- `server/tools/` & `server/resources/` – namespaces for future Zoom integrations.
+The current modules of interest are:
+- `server.py` – entry point that wires the FastMCP transports into Starlette/uvicorn.
+- `base.py` – FastMCP instance and shared constants (e.g., Zoom API base URL).
+- `auth.py` – server-to-server OAuth helper that caches the current account’s token and profile.
+- `tools/meeting/` – MCP tool implementations that call Zoom meeting APIs.
 
-To flesh out the integration:
+To add Zoom functionality:
 
-1. Implement concrete tool/resource handlers in the respective packages.
-2. Wire those handlers into `server/core.py`.
-3. Flesh out the SSE endpoints to forward events and tool invocations between clients and the MCP server.
+1. Implement new tool functions under `tools/` and decorate them with `@zoom_mcp.tool()`.
+2. Import the new tools somewhere under `server.py` so the decorators run at startup.
+3. Extend `auth.py` or add helper modules as needed for additional Zoom endpoints.
 
 ## License
 

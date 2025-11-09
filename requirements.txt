@@ -8,3 +8,6 @@ cryptography>=41.0.0
 click>=8.2.0
 contextvars>=2.4.0
 requests>=2.32.3
+starlette>=0.37.0
+uvicorn>=0.29.0
+pytest>=8.0.0
