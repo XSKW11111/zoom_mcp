@@ -3,7 +3,7 @@
 import base64
 import os
 import time
-from typing import Dict, Optional
+from typing import Optional
 
 import aiohttp
 from base import ZOOM_API_BASE_URL
@@ -35,7 +35,7 @@ class ZoomAuthenticator:
         self.client_secret = client_secret
         self._access_token: Optional[str] = None
         self._token_expires_at: Optional[float] = None
-        self._user_cache: Dict[str, dict] = {}
+        self._user_cache: Optional[dict] = None
 
     def _get_basic_auth_header(self) -> str:
         """Generate Basic Auth header for Zoom API."""
@@ -80,19 +80,10 @@ class ZoomAuthenticator:
                 self._token_expires_at = time.time() + expires_in - 60
 
     async def get_user(self) -> dict:
-        """Fetch and cache a Zoom user by ID or email.
+        """Fetch and cache the Zoom user linked to this authenticator."""
 
-        Args:
-            user_identifier: Zoom user ID or email
-
-        Returns:
-            The Zoom user object as returned by GET /users/{userIdentifier}
-        """
-
-        # Return from cache if present
-        cached = self._user_cache.get()
-        if cached is not None:
-            return cached
+        if self._user_cache is not None:
+            return self._user_cache
 
         token = await self.get_access_token()
         headers = {
@@ -114,16 +105,11 @@ class ZoomAuthenticator:
                         f"Failed to fetch user (HTTP {response.status}): {message}"
                     )
 
-                # Cache by both id and email if available
                 self._user_cache = payload
-                if isinstance(payload, dict):
-                    for key, value in payload.items():
-                        self._user_cache[key] = value
-
                 return payload
 
     async def get_user_id(self) -> str:
-        """Resolve a user identifier (id or email) to Zoom user id, with caching."""
+        """Return the Zoom user id tied to this authenticator."""
         user = await self.get_user()
         user_id = user.get("id") if isinstance(user, dict) else None
         if not user_id:

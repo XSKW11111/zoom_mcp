@@ -8,14 +8,14 @@ logger = logging.getLogger(__name__)
 
 
 @zoom_mcp.tool()
-async def get_zoom_meetings_by_user_id(user_id: str) -> list[dict]:
-    """Fetch meetings for a Zoom user by their user ID.
+async def get_zoom_meetings_by_user_id(user_id: str) -> dict:
+    """Fetch the raw meetings payload for a Zoom user by their user ID.
 
     Args:
         user_id: The Zoom user ID to fetch meetings for
 
     Returns:
-        List of meetings for the specified user
+        Dict returned by GET /users/{userId}/meetings (includes metadata + meetings list)
     """
 
     # Get access token

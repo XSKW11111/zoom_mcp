@@ -4,7 +4,8 @@ from .get_zoom_meetings_by_user_id import get_zoom_meetings_by_user_id
 
 
 @zoom_mcp.tool()
-async def get_own_zoom_meetings() -> list[dict]:
+async def get_own_zoom_meetings() -> dict:
+    """Get the current authenticated user's meetings payload."""
+
     user_id = await get_user_id()
-    """Get the meetings for the current user."""
     return await get_zoom_meetings_by_user_id(user_id)
